@@ -23,7 +23,9 @@ class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
 	import akka.util.Timeout
 
    	val _system = ActorSystem("giVE")
-      val url = ImportURLSpec(  specName = "Test", url="http://www.myexperiment.org/user.xml?id=23" )
+      val urlTask = ImportURLSpec(  name = "Test", url="http://www.myexperiment.org/user.xml?id=23" ) 
+      urlTask.nextSpec = ProcessUserSpec( name = "Convert User to GraphML " )
+
 
  	val tasksTracker = _system.actorOf( Props[TasksTracker], name= "tasksTracker" )
    }
@@ -33,7 +35,7 @@ class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
          it ("can send message") {
             TasksTracker.requests should be (Nil) 
 
-             fixture.tasksTracker  !  fixture.url
+             fixture.tasksTracker  !  fixture.urlTask
          }
          Thread.sleep(5000)
          it ("can rx message") {
@@ -52,13 +54,20 @@ class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
                     k = k+1
                     println("waiting .... "+ k)
                 } while( k <  20  );
-
+              Thread.sleep(3000);
             TasksTracker.results should not be (List())
             val res0 = TasksTracker.results.head
 
             res0.state should  be ( _ : Processed )
+            res0 should be (_: ProcessUserSpec )
             res0.success should  be (true)
-            res0.message should be (  "David De Roure 2.0" )
+            res0.output should be (  "ALL HAIL TO David De Roure 2.0" )
+            val res1 = TasksTracker.results.tail.head
+            res1 should be (_: ImportURLSpec)
+            res1.state should  be ( _ : Processed )
+            res1.success should  be (true)
+            val check = "David De Roure 2.0"
+            res1.output should be (  check  )
             
          }
      }

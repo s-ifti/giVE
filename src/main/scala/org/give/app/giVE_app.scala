@@ -20,8 +20,11 @@ import org.give.imports.messages._
  	val _system = ActorSystem("giVE")
 
  	val tasks = _system.actorOf( Props[TasksTracker], name= "tasksTracker" );
- 	tasks  !  ImportURLSpec(  specName = "Test", url="http://www.myexperiment.org/user.xml?id=23" )
 
+ 	var spec = ImportURLSpec(  name = "Test", url="http://www.myexperiment.org/user.xml?id=23" )
+ 	spec.nextSpec = ProcessUserSpec( name = "Convert User to GraphML " )
+                        
+ 	tasks  !  spec;
 	Thread.sleep(5000)	
 
 	_system.shutdown
