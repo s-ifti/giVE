@@ -1,99 +1,77 @@
 package org.give.imports.messages
 import java.util.Date
 
+import scala.xml._
+import scala.io._
+import scala.concurrent._
+import java.nio.charset._
+import java.net.URL
+
+import ExecutionContext.Implicits.global
+
 abstract class ActorMessageState( val whenStarted: Date  = new Date, var whenProcessed:Date = null)
 case class Requested extends ActorMessageState 
 case class Processed extends ActorMessageState 
 case class Failed extends ActorMessageState 
- 
-abstract class ActorSpec( 
+
+abstract class ActorTaskBase(
 	var specName: String = "",
+	var nextSpec: ActorTaskBase = null,
 	var state: ActorMessageState = Requested(), 
-	var nextSpec: ActorSpec = null,
 	var success:Boolean = false , 
 	var message: String = "" ,
-	var input: String ="",
-	var output: String = ""
-) {
-	def act(replyTo: akka.actor.ActorRef) = {}
+	var inputIndex:Int = 0 )  { 
+
+	def getInput() : AnyRef {}
+	def setInput( input:AnyRef ) {} 
+	def getOutput() : AnyRef {}
+	def getNextTask(): ActorTaskBase {}
+ 	def act(replyTo: akka.actor.ActorRef) = {}
+
 }
 
-case class ImportURLSpec ( val name: String , val url: String ) extends ActorSpec  {
+abstract class ActorTask[INPUT, OUTPUT] ( 
+	var input: INPUT = null,
+	var output: OUTPUT = null)  extends ActorTaskBase 
+{
 
-	import scala.xml._
-	import scala.io._
-	import scala.concurrent._
-	//import context.dispatcher
-	import java.util.Date
-	import java.net.URL
-	import java.nio.charset._
 
-	import ExecutionContext.Implicits.global
+	override def getNextTask():ActorTaskBase = {
+		return nextSpec.asInstanceOf[ ActorTaskBase ];
+	}
+	override def getInput(): AnyRef = {
+		return input.asInstanceOf[ AnyRef ]
+	}
+	override def setInput( inp:  AnyRef ) = {
+		input = inp.asInstanceOf[ INPUT ]
+	} 
+	override def getOutput() :  AnyRef  = {
+		return  output .asInstanceOf[ AnyRef  ]
+	}
+	
+	override def act(replyTo: akka.actor.ActorRef) = {}
+}
+
+case class DownloadURLTask ( val name: String , val url: String ) extends ActorTask[String, String]  
+{
+	 
+	input = url
+	specName = name
+
 
 	// using Tomasz Nurkiewicz  async approach
 	def downloadPage(url: String) = Future {
 	    scala.io.Source.fromURL(new URL( url ) ).mkString
 	}
-	 
-	def parseXML(xmlString: String) =   {
-	    //println(xmlString)
-	    XML.loadString(xmlString)
-	    
-	}
-
-	def parseName(xElem: Elem) =   Future { 
-		xElem  \ "name"  text 
-	}
-
-/*
-<xtl>
-        <fetch  url="users">
-	<foreach  select="user">
-		<fetch url="user?id{abc}"  save="">
-			<fetch url="picture?id{abc}" save="" />
-			<fetch url="groups?lid{abc}"  save=""/>
-			<transform>
-				<graphml>
-
-
-				</graphml>
-			</transform>
-
-		</fetch>
-	</foreach>
-        </fetch>
-
-        <fetch  url="workflows">
-	<foreach  select="workflow">
-		<fetch url="workflow?id{abc}" >
-			<fetch url="workfowXML?id{abc}" />
-			<fetch url="users?lid{abc}" />
-			
-
-		</fetch>
-	</foreach>
-        </fetch>
-</xtl>
-
-
-*/
+	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( "Task DownloadURLTask" + input ); 
 
 
 
-	input = url
-	specName = name
-	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( " Acting ImportURLSpec " + input ); 
+	 	val downloadStringFuture: Future[String] = downloadPage ( url )
 
-
-
-	 	val xmlStringFuture: Future[String] = downloadPage ( url )
-	 	val xmlDocFuture : Future[Elem] = xmlStringFuture map parseXML
-	 	val getNameFuture: Future[String] = xmlDocFuture flatMap parseName
-
-	 	//getNameFuture foreach println
-	 	getNameFuture  onFailure    {
+	 	downloadStringFuture  onFailure    {
 	 				case t => {  	
-	 					println("onFailure xmlStringFuture ")
+	 					println("onFailure downloadStringFuture ")
 	 					success = false
 	 					message = t.getMessage
 	 					state = Processed()  // todo use Failed as another state
@@ -102,9 +80,9 @@ case class ImportURLSpec ( val name: String , val url: String ) extends ActorSpe
 	 					replyTo ! this
 	 				}
 	 			} 
-	 	getNameFuture  onSuccess   {
+	 	downloadStringFuture  onSuccess   {
 	 				case result => { 
-			 			println("onSuccess  parseName ")
+			 			println("onSuccess  downloadStringFuture ")
 
 	 					success = true
 	 					message = "downloaded"
@@ -121,7 +99,67 @@ case class ImportURLSpec ( val name: String , val url: String ) extends ActorSpe
 }
 
 
-case class ProcessUserSpec ( val name: String ) extends ActorSpec  {
+case class XmlParseTask ( val name: String ) extends ActorTask[String, Elem ]  
+{
+	specName = name
+
+
+
+	 
+	def parseXML(xmlString: String):Elem =   {
+
+
+	    XML.loadString(xmlString)
+	    
+	}
+
+	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( " Acting XmlParseTask " + input ); 
+
+
+	 	val userXml: Elem =  parseXML( input )
+		println("onSuccess  xmlDocFuture ")
+
+		success = true
+		message = "xml loaded"
+		output = userXml
+		state = Processed()
+		state.whenProcessed = new Date 
+
+		replyTo! this
+
+
+	}
+}
+
+
+
+case class ParseNameTask( val name: String ) extends ActorTask[Elem, String]  {
+	specName = name
+
+
+	 def parseName(xElem: Elem) =   { 
+		xElem  \ "name"  text 
+	}
+
+	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( " Acting ImportURLSpec " + input ); 
+
+
+	 	val  userName = parseName( input )
+
+		println("onSuccess  XmlParseName ")
+
+		success = true
+		message = "parsed"
+		output = userName
+		state = Processed()
+		state.whenProcessed = new Date 
+
+		replyTo! this
+
+	}
+}
+
+case class ProcessUserSpec ( val name: String ) extends ActorTask[String, String]  {
 	specName = name
 	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( " Acting ProcessUserSpec " + input ); 
 		output = "ALL HAIL TO " + input;

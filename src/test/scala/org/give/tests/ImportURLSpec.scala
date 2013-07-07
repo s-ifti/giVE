@@ -14,7 +14,7 @@ import org.give.imports.messages._
 class ImportURLSpecTest  extends FunSpec with ShouldMatchers  {
    describe("Specs for ImportURLSpec" ) {
        it ("can instantiate ImportURLSpec ") {
-           val importURL =  ImportURLSpec(  name = "Test", url="http://fake.com" )
+           val importURL =  DownloadURLTask(  name = "Test", url="http://fake.com" )
            importURL.specName should be ("Test")
        }
    }
