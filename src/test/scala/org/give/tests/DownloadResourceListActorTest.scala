@@ -23,10 +23,10 @@ class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
 	import akka.util.Timeout
 
    	val _system = ActorSystem("giVE")
-      val urlTask = DownloadURLTask(  name = "Download", url="http://www.myexperiment.org/user.xml?id=23" ) 
-      urlTask.nextSpec = XmlParseTask( name = "Parse XML") 
-      urlTask.nextSpec.nextSpec = ParseNameTask( name = "Parse Name")
-      urlTask.nextSpec.nextSpec.nextSpec = ProcessUserSpec( name = "Convert User to GraphML " )
+      val urlTask = DownloadURLTask(  specName = "Download", url="http://www.myexperiment.org/user.xml?id=23" ) 
+      urlTask.nextSpec = XmlParseTask( specName = "Parse XML") 
+      urlTask.nextSpec.nextSpec = ParseNameTask( specName = "Parse Name")
+      urlTask.nextSpec.nextSpec.nextSpec = ProcessUserSpec( specName = "Convert User to GraphML " )
 
 
  	val tasksTracker = _system.actorOf( Props[TasksTracker], name= "tasksTracker" )
@@ -41,7 +41,7 @@ class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
          }
          Thread.sleep(5000)
          it ("can rx message") {
-            TasksTracker.requests.head.state should  be ( _ : Requested )
+            TasksTracker.requests.head.getState should  be ( _ : Requested )
           }
 
          it("can process message and return success") {
@@ -60,14 +60,14 @@ class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
             TasksTracker.results should not be (List())
             val res0 = TasksTracker.results.head
 
-            res0.state should  be ( _ : Processed )
+            res0.getState should  be ( _ : Processed )
             res0 should be (_: ProcessUserSpec )
-            res0.success should  be (true)
+            res0.isSuccess  should  be (true)
             res0.getOutput should be (  "ALL HAIL TO David De Roure 2.0" )
             val res1 = TasksTracker.results.tail.head
             res1 should be (_: DownloadURLTask)
-            res1.state should  be ( _ : Processed )
-            res1.success should  be (true)
+            res1.getState should  be ( _ : Processed )
+            res1.isSuccess  should  be (true)
             val check = "David De Roure 2.0"
             res1.getOutput should be (  check  )
             

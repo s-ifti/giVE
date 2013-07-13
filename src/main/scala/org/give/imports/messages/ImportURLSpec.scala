@@ -14,20 +14,37 @@ case class Requested extends ActorMessageState
 case class Processed extends ActorMessageState 
 case class Failed extends ActorMessageState 
 
-abstract class ActorTaskBase(
-	var specName: String = "",
+abstract class ActorTaskBase (
+	val specName: String = "",
 	var nextSpec: ActorTaskBase = null,
-	var state: ActorMessageState = Requested(), 
-	var success:Boolean = false , 
-	var message: String = "" ,
-	var inputIndex:Int = 0 )  { 
+	private var state: ActorMessageState = Requested(), 
+	private var success:Boolean = false , 
+	private var message: String = "" ,
+	var whenRecieved: Date  = null,
+	var inputIndex:Int = 0 )  extends Cloneable 
+{ 
 
 	def getInput() : AnyRef {}
 	def setInput( input:AnyRef ) {} 
 	def getOutput() : AnyRef {}
+	def setOutput( output : AnyRef ) {}
 	def getNextTask(): ActorTaskBase {}
+	def isSuccess(): Boolean = { return success }
+	def getState(): ActorMessageState = { return state }
  	def act(replyTo: akka.actor.ActorRef) = {}
+ 	
+ 	def processed( r_success : Boolean, r_message: String , r_output: AnyRef ): ActorTaskBase  = {
+ 		var cloned: ActorTaskBase = this.clone().asInstanceOf[ ActorTaskBase ]
+ 		cloned.success = r_success
+ 		cloned.message = r_message
+ 		cloned.setOutput ( r_output )
 
+		cloned.state = Processed()
+		cloned.state.whenProcessed = new Date 
+
+ 		return cloned
+
+ 	}
 }
 
 abstract class ActorTask[INPUT, OUTPUT] ( 
@@ -49,49 +66,46 @@ abstract class ActorTask[INPUT, OUTPUT] (
 		return  output .asInstanceOf[ AnyRef  ]
 	}
 	
+	override def setOutput( out:  AnyRef ) = {
+		output = out.asInstanceOf[ OUTPUT  ]
+	} 
 	override def act(replyTo: akka.actor.ActorRef) = {}
+
+	
 }
 
-case class DownloadURLTask ( val name: String , val url: String ) extends ActorTask[String, String]  
+case class DownloadURLTask ( override val specName: String , val url: String, var page:Int = 1 ) extends ActorTask[String, String]  
 {
 	 
 	input = url
-	specName = name
+//	specName = name
 
-
+	
 	// using Tomasz Nurkiewicz  async approach
 	def downloadPage(url: String) = Future {
 	    scala.io.Source.fromURL(new URL( url ) ).mkString
 	}
-	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( "Task DownloadURLTask" + input ); 
+	override def act( replyTo: akka.actor.ActorRef) = { 
+		//System.out.println( "Task DownloadURLTask" + input ); 
 
 
+		var fetchURL = url 
+		if ( page > 1  )
+			fetchURL += ("?page=" + page.toString() )  
+		println("URL: "  + fetchURL)
 
-	 	val downloadStringFuture: Future[String] = downloadPage ( url )
+	 	val downloadStringFuture: Future[String] = downloadPage (  fetchURL  )
 
 	 	downloadStringFuture  onFailure    {
 	 				case t => {  	
 	 					println("onFailure downloadStringFuture ")
-	 					success = false
-	 					message = t.getMessage
-	 					state = Processed()  // todo use Failed as another state
-	 					state.whenProcessed = new Date 
-
-	 					replyTo ! this
+	 					replyTo ! processed(  false, t.getMessage , "error")
 	 				}
 	 			} 
 	 	downloadStringFuture  onSuccess   {
 	 				case result => { 
-			 			println("onSuccess  downloadStringFuture ")
-
-	 					success = true
-	 					message = "downloaded"
-	 					output = result
-	 					state = Processed()
-		 				state.whenProcessed = new Date 
-
-		 				replyTo! this
-
+			 			//println("onSuccess  downloadStringFuture " + fetchURL )
+	 					replyTo ! processed(  true, "downloaded" , result)
 	 				}
 	 			} 
 
@@ -99,13 +113,8 @@ case class DownloadURLTask ( val name: String , val url: String ) extends ActorT
 }
 
 
-case class XmlParseTask ( val name: String ) extends ActorTask[String, Elem ]  
+case class XmlParseTask ( override val specName: String ) extends ActorTask[String, Elem ]  
 {
-	specName = name
-
-
-
-	 
 	def parseXML(xmlString: String):Elem =   {
 
 
@@ -113,19 +122,14 @@ case class XmlParseTask ( val name: String ) extends ActorTask[String, Elem ]
 	    
 	}
 
-	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( " Acting XmlParseTask " + input ); 
+	override def act( replyTo: akka.actor.ActorRef) = { 
+		//System.out.println( " Acting XmlParseTask " + input ); 
 
 
 	 	val userXml: Elem =  parseXML( input )
-		println("onSuccess  xmlDocFuture ")
+		//println("onSuccess  xmlDocFuture ")
+		replyTo ! processed(  true, "xml loaded" , userXml )
 
-		success = true
-		message = "xml loaded"
-		output = userXml
-		state = Processed()
-		state.whenProcessed = new Date 
-
-		replyTo! this
 
 
 	}
@@ -133,42 +137,22 @@ case class XmlParseTask ( val name: String ) extends ActorTask[String, Elem ]
 
 
 
-case class ParseNameTask( val name: String ) extends ActorTask[Elem, String]  {
-	specName = name
-
+case class ParseNameTask( override val specName: String ) extends ActorTask[Elem, String]  {
 
 	 def parseName(xElem: Elem) =   { 
 		xElem  \ "name"  text 
 	}
-
-	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( " Acting ImportURLSpec " + input ); 
-
-
+	override def act( replyTo: akka.actor.ActorRef) = { 
 	 	val  userName = parseName( input )
-
-		println("onSuccess  XmlParseName ")
-
-		success = true
-		message = "parsed"
-		output = userName
-		state = Processed()
-		state.whenProcessed = new Date 
-
-		replyTo! this
-
+		replyTo ! processed(  true, "parsed" , userName)
 	}
 }
 
-case class ProcessUserSpec ( val name: String ) extends ActorTask[String, String]  {
-	specName = name
-	override def act( replyTo: akka.actor.ActorRef) = { System.out.println( " Acting ProcessUserSpec " + input ); 
+case class ProcessUserSpec ( override val specName: String ) extends ActorTask[String, String]  {
+	
+	override def act( replyTo: akka.actor.ActorRef) = { 
+		//System.out.println( " Acting ProcessUserSpec " + input ); 
 		output = "ALL HAIL TO " + input;
-
-		success = true
-		message = "transformed"
-		state = Processed()
-		state.whenProcessed = new Date 
-
-		replyTo! this
+		replyTo ! processed(  true, "transformed" , "ALL HAIL TO " + input )
 	}
 }

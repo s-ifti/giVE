@@ -22,10 +22,11 @@ class TasksTracker extends Actor {
 	def receive: Receive = { 
 
 		case  msg:  ActorTaskBase=> {
-			println("Received message " + msg )
-			msg.state match{
+			//println("Received message " + msg )
+			msg.getState() match{
 			  	case  _ : Processed => { 
-			  		println ( "Processed  " + msg.specName )
+			  		//println ( "Processed  " + msg.specName )
+		 			msg.whenRecieved = new Date
 		 			TasksTracker.results = msg :: TasksTracker.results
 		 			var nextTask = msg.getNextTask
 		 			if( nextTask  != null ) {
@@ -36,9 +37,9 @@ class TasksTracker extends Actor {
 
 		 		}
 		 		case _ : Requested => {
-			  		println ( "Requested " + msg.specName)
+			  		//println ( "Requested " + msg.specName)
+		 			msg.whenRecieved = new Date
 		 			TasksTracker.requests = msg :: TasksTracker.requests
-		 			msg.state.whenProcessed = new Date
 		 			msg.act( self )
 		 			//downloader   !  msg
 		 		}

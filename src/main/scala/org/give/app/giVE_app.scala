@@ -7,13 +7,13 @@ import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.pattern.ask
 import akka.util.Timeout
-
+import java.util.Date
 
 import org.give.imports.actors._
 
 import org.give.imports.messages._
 
-/* General Repeater
+/* General Repeater todo
 case class RepaterTask( val name: String, innerTasks : List[ActorTaskBase]  ) extends  ActorTask[AnyRef,AnyRef]{
 	specName = name
 
@@ -34,8 +34,8 @@ case class RepaterTask( val name: String, innerTasks : List[ActorTaskBase]  ) ex
 }
 */
 
-case class IterateUsersTask( val name: String ,  val taskRunner: akka.actor.ActorRef ) extends ActorTask[Elem, Seq[String] ] {
-	specName = name
+case class IterateUsersTask( override val specName: String ,  val taskRunner: akka.actor.ActorRef ) extends ActorTask[Elem, Seq[String] ] {
+	
 	override def act( replyTo: akka.actor.ActorRef) = { 
 		//println  " Acting IterateUsersTask "
 		var urlUsers: Seq[String] =   input  \\ "user" map(x=> x.attribute("uri").get toString)
@@ -43,31 +43,53 @@ case class IterateUsersTask( val name: String ,  val taskRunner: akka.actor.Acto
 		output = urlUsers
 
 		urlUsers.foreach( userURI =>   { 
-			var urlUserDownloadTask = DownloadURLTask(  name = "Download", url= userURI ) 
-			urlUserDownloadTask.nextSpec = XmlParseTask( name = "Parse XML") 
-			urlUserDownloadTask.nextSpec.nextSpec = ParseNameTask( name = "Parse Name")
-			urlUserDownloadTask.nextSpec.nextSpec.nextSpec = ProcessUserSpec( name = "Convert User to GraphML " )
+			var urlUserDownloadTask = DownloadURLTask(  specName = "Download", url= userURI ) 
+			urlUserDownloadTask.nextSpec = XmlParseTask(  specName = "Parse XML") 
+			urlUserDownloadTask.nextSpec.nextSpec = ParseNameTask( specName = "Parse Name")
+			urlUserDownloadTask.nextSpec.nextSpec.nextSpec = ProcessUserSpec( specName = "Convert User to GraphML " )
 		                      
 		 	taskRunner  !  urlUserDownloadTask;
+
+
  		} )
+ 		// need to support Future interface within ActorTask so we can wait for all to finish
+ 		taskRunner ! processed(  true, "processing total " + urlUsers.count( (x)=> { true } ) + " users" ,  urlUsers )
 
 
 	}
 
 }
+case  class LoopbackTask ( Task : DownloadURLTask  ) extends ActorTask[ Seq[String] , String]  
+{
+	override def act(taskRunner: akka.actor.ActorRef ) {
 
+		println("LoopbackTask")
+		// don't we need mutual exclusion here here
+
+		Task.page = Task.page + 1
+		var iteration = Task.page
+
+
+		if(  !  this.input.isEmpty  ) {
+			println( "iteration # " + iteration)
+			output = "loop"
+			
+			taskRunner ! Task
+			taskRunner ! processed(  true, "loop # " +  iteration, "end" )
+
+		}
+		else {
+			output = "end"
+			println ("No more users found !")
+			taskRunner ! processed(  true, "no more users", "end" )
+		}
+	}
+
+}
  object giVE_app extends App { 
 
 	println("giVE_app")
-	def iter(head:ActorTaskBase, tail: List[ActorTaskBase]):AnyRef = {   
-		
-		println( "HEAD: " + head )
-
-		if  ( ! tail.isEmpty ) {
-			iter( tail.head, tail.tail ); 
-		}
-		return null;
-	}
+	 
 	
  	val _system = ActorSystem("giVE")
 
@@ -82,15 +104,16 @@ case class IterateUsersTask( val name: String ,  val taskRunner: akka.actor.Acto
 	*/
 
 	//download all users and their detailed XMLs
- 	val getUsers = DownloadURLTask( name = "Download", url="http://www.myexperiment.org/users.xml" ) 
-	getUsers.nextSpec = XmlParseTask( name = "Parse XML") 
-	getUsers.nextSpec.nextSpec = IterateUsersTask( name="Iterate Users", tasks)
-
+ 	val getUsers = DownloadURLTask( specName = "Download", url="http://www.myexperiment.org/users.xml", page = 1 ) 
+	getUsers.nextSpec = XmlParseTask( specName = "Parse XML") 
+	getUsers.nextSpec.nextSpec = IterateUsersTask( specName="Iterate Users", tasks)
+	getUsers.nextSpec.nextSpec.nextSpec  = LoopbackTask ( Task  = getUsers   )
 	tasks ! getUsers
 
-	Thread.sleep(5000)	
-	//println("link: " + urlTask.getOutput + " xml: " +  urlTask.nextSpec.getOutput + " name:" + urlTask.nextSpec.nextSpec.getOutput )
-	iter( TasksTracker.results.head, TasksTracker.results.tail );
+	//Thread.sleep(25000)	
+	readLine
+	//TasksTracker.results map println
+
 	_system.shutdown
 }
 
