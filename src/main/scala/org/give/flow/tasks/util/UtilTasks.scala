@@ -27,7 +27,9 @@ import ExecutionContext.Implicits.global
 /* 
 ## Given a URL retrieve it and generate string output 
 */
-case class DownloadURLTask ( override val specName: String , val url: String, var page:Int = 1 ) extends Task[String, String]  
+case class DownloadURLTask ( override val specName: String , val url: String, var page:Int = 1  /* todo generalize parameters as generalized dictionary */
+		, override val nextTask: TaskBase = null
+	) extends Task[String, String]  
 {
 	 
 	input = url
@@ -48,8 +50,15 @@ case class DownloadURLTask ( override val specName: String , val url: String, va
 
 
 		var fetchURL = url 
-		if ( page > 1  )
-			fetchURL += ("?page=" + page.toString() )  
+		if ( page > 1  ) {
+			if( fetchURL.indexOf("?") > 0 ) {
+				fetchURL += "&"
+			}
+			else {
+				fetchURL += "?"
+			}
+			fetchURL += ("page=" + page.toString() )  
+		}
 		println("URL: "  + fetchURL)
 
 	 	val downloadStringFuture: Future[String] = downloadPage (  fetchURL  )
@@ -74,7 +83,9 @@ case class DownloadURLTask ( override val specName: String , val url: String, va
 /*
 	Given a string XML parse and return XML Elem as output 
 */
-case class XmlParseTask ( override val specName: String ) extends Task[String, Elem ]  
+case class XmlParseTask ( override val specName: String 
+	, override val nextTask: TaskBase = null
+) extends Task[String, Elem ]  
 {
 	def parseXML(xmlString: String):Elem =   {
 
@@ -99,7 +110,10 @@ case class XmlParseTask ( override val specName: String ) extends Task[String, E
 
 /* given an XML document find an element */
 
-case class ParseNameTask( override val specName: String , val elementName : String, val anyDescendants: Boolean = false ) extends Task[Elem, String]  {
+case class ParseNameTask( override val specName: String , val elementName : String, 
+	val anyDescendants: Boolean = false,
+	override val nextTask: TaskBase = null
+) extends Task[Elem, String]  {
 
 	 def parseName(xElem: Elem) =   {
 	 	if(anyDescendants)
@@ -126,13 +140,17 @@ case class ParseNameTask( override val specName: String , val elementName : Stri
 	given a task loop back to it, stop if loopUntil returns false
 */
 case  class LoopbackTask ( override val specName:String = "LoopbackTask", 
-	var task : TaskBase , 
-	var loopUntil: ( Task[AnyRef,AnyRef] ) => Boolean   ) extends Task[ AnyRef , AnyRef]  
+	var backToTask : () => TaskBase , 
+	var loopUntil: ( Task[AnyRef,AnyRef] ) => Boolean
+	/* loopback can't have a next task for now ,
+	override val nextTask: TaskBase = null */ 
+) extends Task[ AnyRef , AnyRef]  
 {
 	
 	override def act(taskMover: akka.actor.ActorRef ) {
 
 		println("LoopbackTask")
+		val task = backToTask()
 		// don't we need mutual exclusion here here
 		val iteration = task.loopIncrement()
 		//Task.page = Task.page + 1

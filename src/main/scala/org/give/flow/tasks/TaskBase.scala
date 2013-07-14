@@ -27,7 +27,7 @@ abstract class TaskBase (
 		#### Members that can be changed
 	*/
 	var whenRecieved: Date  = null,
-	var nextSpec: TaskBase = null,
+	val nextTask: TaskBase = null,
 	var message: String = "",
 	/*
 		#### Private
@@ -40,7 +40,9 @@ abstract class TaskBase (
 	def setInput( input:AnyRef ) {} 
 	def getOutput() : AnyRef {}
 	def setOutput( output : AnyRef ) {}
-	def getNextTask(): TaskBase {}
+	def getNextTask():TaskBase = {
+		return nextTask;
+	}
 	def isSuccess(): Boolean = { return success }
 	def getState(): TaskState = { return state }
 
@@ -86,9 +88,7 @@ abstract class Task[INPUT, OUTPUT] (
 {
 
 
-	override def getNextTask():TaskBase = {
-		return nextSpec.asInstanceOf[ TaskBase ];
-	}
+	
 	override def getInput(): AnyRef = {
 		return input.asInstanceOf[ AnyRef ]
 	}

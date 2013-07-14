@@ -35,7 +35,9 @@ case class RepaterTask( val name: String, innerTasks : List[ActorTaskBase]  ) ex
 }
 */
 
-case class IterateUsersTask( override val specName: String ,  val taskRunner: akka.actor.ActorRef ) extends Task[Elem, Seq[String] ] {
+case class IterateUsersTask( override val specName: String ,  val taskRunner: akka.actor.ActorRef 
+	, override val nextTask: TaskBase = null
+) extends Task[Elem, Seq[String] ] {
 	
 	override def act( replyTo: akka.actor.ActorRef) = { 
 		//println  " Acting IterateUsersTask "
@@ -44,10 +46,18 @@ case class IterateUsersTask( override val specName: String ,  val taskRunner: ak
 		output = urlUsers
 
 		urlUsers.foreach( userURI =>   { 
-			var urlUserDownloadTask = DownloadURLTask(  specName = "Download", url= userURI ) 
-			urlUserDownloadTask.nextSpec = XmlParseTask(  specName = "Parse XML") 
-			urlUserDownloadTask.nextSpec.nextSpec = ParseNameTask( specName = "Parse Name", elementName = "name")
-			urlUserDownloadTask.nextSpec.nextSpec.nextSpec = ProcessUserSpec( specName = "Convert User to GraphML " )
+			var urlUserDownloadTask = DownloadURLTask(  
+										specName = "Download", 
+										url= userURI + "&all_elements=yes", 
+										nextTask = XmlParseTask(  
+														specName = "Parse XML",
+														nextTask = ParseNameTask( 
+																		specName = "Parse Name", 
+																		elementName = "name",
+																		nextTask = ProcessUserSpec( specName = "Convert User to GraphML " )
+																	)
+													)
+										)
 		                      
 		 	taskRunner  !  urlUserDownloadTask;
 
@@ -63,7 +73,9 @@ case class IterateUsersTask( override val specName: String ,  val taskRunner: ak
 
 
 
-case class ProcessUserSpec ( override val specName: String ) extends Task[String, String]  {
+case class ProcessUserSpec ( override val specName: String 
+	,  override val nextTask: TaskBase = null
+) extends Task[String, String]  {
 	
 	override def act( replyTo: akka.actor.ActorRef) = { 
 		//System.out.println( " Acting ProcessUserSpec " + input ); 

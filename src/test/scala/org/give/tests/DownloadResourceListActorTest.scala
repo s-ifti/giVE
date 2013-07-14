@@ -25,10 +25,18 @@ class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
     	import akka.util.Timeout
 
      	val _system = ActorSystem("giVE")
-      val urlTask = DownloadURLTask(  specName = "Download", url="http://www.myexperiment.org/user.xml?id=23" ) 
-      urlTask.nextSpec = XmlParseTask( specName = "Parse XML") 
-      urlTask.nextSpec.nextSpec = ParseNameTask( specName = "Parse Name" , elementName="name" )
-      urlTask.nextSpec.nextSpec.nextSpec = ProcessUserSpec( specName = "Convert User to GraphML ")
+      val urlTask = DownloadURLTask(  
+                        specName = "Download", 
+                        url="http://www.myexperiment.org/user.xml?id=23", 
+                        nextTask = XmlParseTask( 
+                                      specName = "Parse XML",
+                                      nextTask = ParseNameTask( 
+                                                    specName = "Parse Name" , 
+                                                    elementName="name",
+                                                    nextTask = ProcessUserSpec( specName = "Convert User to GraphML ")
+                                                  )
+                                    )
+                      )
 
 
      	val tasksMover = _system.actorOf( Props[TasksMover], name= "tasksMover" )

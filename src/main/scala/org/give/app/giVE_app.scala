@@ -24,16 +24,26 @@ object giVE_app extends App {
 
  	val tasks = _system.actorOf( Props[TasksMover], name= "tasksMover" );
 
-
+ 	var getUsersTask:TaskBase = null
 	//download all users and their detailed XMLs
- 	val getUsers = DownloadURLTask( specName = "Download", url="http://www.myexperiment.org/users.xml", page = 1 ) 
-	getUsers.nextSpec = XmlParseTask( specName = "Parse XML") 
-	getUsers.nextSpec.nextSpec = IterateUsersTask( specName="Iterate Users", tasks)
-	getUsers.nextSpec.nextSpec.nextSpec  = LoopbackTask ( task  = getUsers , 
-													loopUntil = {  (mySelf)  =>   
-														!mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
-													} )
-	tasks ! getUsers
+ 	getUsersTask = DownloadURLTask( 
+ 						specName = "Download", url="http://www.myexperiment.org/users.xml?num=25", page = 1 , 
+						nextTask = XmlParseTask( 
+										specName = "Parse XML",
+										nextTask = IterateUsersTask( 
+														specName="Iterate Users", 
+														taskRunner = tasks,
+														nextTask = LoopbackTask ( backToTask  = { ()=> getUsersTask } , 
+																loopUntil = {  (mySelf)  =>   
+																	!mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
+																} )
+													)
+
+									)
+					
+					)
+	//getUsers.nextTask.nextTask.nextTask  = 
+	tasks ! getUsersTask
 
 	//Thread.sleep(25000)	
 	readLine
