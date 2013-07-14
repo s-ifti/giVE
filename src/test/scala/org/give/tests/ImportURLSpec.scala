@@ -8,8 +8,10 @@ import org.scalatest.matchers.ShouldMatchers
 
 
 
-import org.give.imports.actors._
-import org.give.imports.messages._
+import org.give.flow.mover.TasksMover
+import org.give.flow.tasks._
+import org.give.flow.tasks.util._
+
 
 class ImportURLSpecTest  extends FunSpec with ShouldMatchers  {
    describe("Specs for ImportURLSpec" ) {
