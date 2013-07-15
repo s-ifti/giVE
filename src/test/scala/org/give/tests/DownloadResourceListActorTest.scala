@@ -13,6 +13,18 @@ import org.give.flow.tasks._
 import org.give.flow.tasks.util._
 import org.give.imports.tasks.myexperiments._
 
+/* not used any more, deprecated */
+case class ProcessUserSpec ( override val specName: String 
+  ,  override val nextTask: TaskBase = null
+) extends Task[String, String]  {
+  
+  override def act( replyTo: akka.actor.ActorRef) = { 
+    
+    output = "ALL HAIL TO " + input;
+    replyTo ! processed(  true, "transformed" , "ALL HAIL TO " + input )
+  }
+}
+
 class IDownloadResourceListActorTest  extends FunSpec with ShouldMatchers  {
   
 

@@ -20,16 +20,20 @@ import java.net.URL
 
 /* 
 ## Dependencies
-### akka exceutioncontext global
+### exceutioncontext global for Future 
 */
 
 import ExecutionContext.Implicits.global
 /* 
 ## Given a URL retrieve it and generate string output 
 */
-case class DownloadURLTask ( override val specName: String , val url: String, var page:Int = 1  /* todo generalize parameters as generalized dictionary */
-		, override val nextTask: TaskBase = null
-	) extends Task[String, String]  
+case class DownloadURLTask ( 
+	override val specName: String , 
+	val url: String, 
+	var page:Int = 1  /*  use page as a general mechanism to access RESTFUL urls 
+							that support paging. todo generalize parameters as generalized dictionary */
+	,override val nextTask: TaskBase = null
+) extends Task[String, String]  
 {
 	 
 	input = url
@@ -88,22 +92,12 @@ case class XmlParseTask ( override val specName: String
 ) extends Task[String, Elem ]  
 {
 	def parseXML(xmlString: String):Elem =   {
-
-
 	    XML.loadString(xmlString)
-	    
 	}
 
 	override def act( replyTo: akka.actor.ActorRef) = { 
-		//System.out.println( " Acting XmlParseTask " + input ); 
-
-
 	 	val userXml: Elem =  parseXML( input )
-		//println("onSuccess  xmlDocFuture ")
 		replyTo ! processed(  true, "xml loaded" , userXml )
-
-
-
 	}
 }
 
@@ -149,21 +143,14 @@ case  class LoopbackTask ( override val specName:String = "LoopbackTask",
 	
 	override def act(taskMover: akka.actor.ActorRef ) {
 
-		println("LoopbackTask")
 		val task = backToTask()
-		// don't we need mutual exclusion here here
 		val iteration = task.loopIncrement()
-		//Task.page = Task.page + 1
-		//var iteration = Task.page
-
 
 		if(   loopUntil(this)  ) {
 			println( "iteration # " + iteration)
 			output = "loop"
-			
 			taskMover ! task
 			taskMover ! processed(  true, "loop # " +  task.loopIndex , "end" )
-
 		}
 		else {
 			output = "end"
@@ -173,3 +160,31 @@ case  class LoopbackTask ( override val specName:String = "LoopbackTask",
 	}
 
 }
+
+/* print input to console */
+case  class PrintInput ( override val specName:String = "PrintInput")  extends Task[ AnyRef , AnyRef]  
+{
+	
+	override def act(taskMover: akka.actor.ActorRef ) {
+		println (input.toString)
+		output = "done"
+	}
+
+}
+
+
+/*
+	given a task output pass it as input to multiple tasks at once and execute. 
+*/
+case  class CompositeTasks ( override val specName:String = "CompositeTasks", 
+	var tasks : Seq[TaskBase] 
+) extends Task[ AnyRef , AnyRef]  
+{
+	
+	override def act(taskMover: akka.actor.ActorRef ) {
+		tasks map ( (x)=> { x.setInput(this.input); taskMover ! x })
+		output = "done"
+	}
+
+}
+

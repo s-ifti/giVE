@@ -1,3 +1,7 @@
+/* Using giVE.flow import external content and create output for graphml or any other format 
+Right now using myexperiments open dataset as example, todo: move to a separate project
+
+*/
 package org.give.app
 import scala.xml._
 import org.give 
@@ -22,17 +26,18 @@ object giVE_app extends App {
 	
  	val _system = ActorSystem("giVE")
 
- 	val tasks = _system.actorOf( Props[TasksMover], name= "tasksMover" );
+ 	val tasksMover = _system.actorOf( Props[TasksMover], name= "tasksMover" );
 
  	var getUsersTask:TaskBase = null
-	//download all users and their detailed XMLs
+	//download all users and their detailed XMLs, and process them, use Loopback to fetch all users until there
+	//are none returned
  	getUsersTask = DownloadURLTask( 
  						specName = "Download", url="http://www.myexperiment.org/users.xml?num=25", page = 1 , 
 						nextTask = XmlParseTask( 
 										specName = "Parse XML",
 										nextTask = IterateUsersTask( 
 														specName="Iterate Users", 
-														taskRunner = tasks,
+														taskRunner = tasksMover,
 														nextTask = LoopbackTask ( backToTask  = { ()=> getUsersTask } , 
 																loopUntil = {  (mySelf)  =>   
 																	!mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
@@ -42,13 +47,12 @@ object giVE_app extends App {
 									)
 					
 					)
-	//getUsers.nextTask.nextTask.nextTask  = 
-	tasks ! getUsersTask
+ 	// run
+	tasksMover ! getUsersTask
 
-	//Thread.sleep(25000)	
+	// todo wait for all URLs to be processed, depends on flow to support Future
 	readLine
-	//TasksMover.results map println
-
+	
 	_system.shutdown
 }
 

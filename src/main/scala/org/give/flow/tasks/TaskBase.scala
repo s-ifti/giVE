@@ -19,18 +19,30 @@ This represent base Task abstraction for giVE.Flow framework
 */
 abstract class TaskBase (
 	/* 
-		#### Members with One time initializations
+		#### Members (immutable)
 	*/
 	val specName: String = "",
+	/*
+		when task was created
+	*/
 	val whenCreated: Date = new Date,
 	/* 
-		#### Members that can be changed
+		#### Members (mutable)
+	*/
+	/*
+		when task was received for processing by TasksMover
 	*/
 	var whenRecieved: Date  = null,
+	/*
+		nextTask for flow (TasksMover will use it to pass output to nextTask input, thus creating a pipe) 
+	*/
 	val nextTask: TaskBase = null,
+	/*
+		any message by task once it is finished (e.g. error in case of an error)
+	*/
 	var message: String = "",
 	/*
-		#### Private
+		#### Members (Private)
 	*/
 	private var state: TaskState = Requested(), 
 	private var success:Boolean = false )  extends Cloneable 
@@ -102,6 +114,9 @@ abstract class Task[INPUT, OUTPUT] (
 	override def setOutput( out:  AnyRef ) = {
 		output = out.asInstanceOf[ OUTPUT  ]
 	} 
+
+	/* given an input process it and generate output
+	*/
 	override def act(replyTo: akka.actor.ActorRef) = {}
 
 	
