@@ -78,12 +78,41 @@ abstract class TaskBase (
 
 		cloned.state = Processed()
 		cloned.state.whenProcessed = new Date 
-
+		
  		return cloned
 
  	}
+ 	var observerTasks: List[TaskBase] = List()
 
- 	/* move to trait TaskCanRepeat */
+ 	def addObserver(me:TaskBase):TaskBase = { 
+ 		observerTasks = me :: observerTasks 
+ 		return me
+ 	}
+ 	def waitFor(me:TaskBase):TaskBase = {
+ 		waitingForTasks = me :: waitingForTasks
+ 		me.addObserver( this )
+ 		return me
+ 	}
+ 	var waitingForTasks: List[TaskBase] = List()
+
+ 	def allWaitOver = {}
+ 	def observedTaskDone(replyTo: akka.actor.ActorRef, whoIsDone:TaskBase):Boolean = {
+ 		//println("observableTaskDone " + whoIsDone.specName + " for " + this.specName)
+ 		waitingForTasks = waitingForTasks.filter( (x) => x.specName != whoIsDone.specName )   
+ 		if(waitingForTasks.isEmpty ) {
+
+ 			observerTasks.foreach(x => { x.observedTaskDone(replyTo, this) })
+ 			observerTasks = List()
+ 			allWaitOver
+ 			return true;
+ 		}
+		return false;
+	}
+	def waitForNext():TaskBase = {
+		waitFor( nextTask )
+		return this
+	}
+ 	/* todo move to trait TaskCanRepeat */
  	def loopIncrement(): Int = { 0 }
  	def loopIndex(): Int = { 0 }
 
@@ -99,7 +128,7 @@ abstract class Task[INPUT, OUTPUT] (
 	var output: OUTPUT = null)  extends TaskBase 
 {
 
-
+	 
 	
 	override def getInput(): AnyRef = {
 		return input.asInstanceOf[ AnyRef ]

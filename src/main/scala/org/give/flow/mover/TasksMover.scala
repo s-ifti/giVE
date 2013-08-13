@@ -71,14 +71,21 @@ class TasksMover extends Actor {
 		 			TasksMover.results = msg :: TasksMover.results
 		 			var nextTask = msg.getNextTask
 		 			if( msg.isSuccess && nextTask  != null ) {
+		 				// todo: review implicit observer
+		 				//nextTask.addObserver(msg)
 		 				nextTask.setInput ( msg.getOutput )
 		 				self ! nextTask
 		 			}
 		 			else if( !msg.isSuccess ) {
 		 				println ("task " + msg.specName + " failed. message:" + msg.message )
 		 			}
+	 				if( msg.isSuccess && !msg.observerTasks.isEmpty  ) {
+	 					msg.observerTasks.foreach(x => { x.observedTaskDone(self, msg) })
+	 				}
 
-		 		}		 	}
+
+		 		}		 	
+		 	}
 		 }
 
 	}

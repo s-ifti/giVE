@@ -32,19 +32,20 @@ object giVE_app extends App {
 	//download all users and their detailed XMLs, and process them, use Loopback to fetch all users until there
 	//are none returned
  	getUsersTask = DownloadURLTask( 
- 						specName = "Download", url="http://www.myexperiment.org/users.xml?num=25", page = 1 , 
+ 						specName = "UsersDownload", url="http://www.myexperiment.org/users.xml?num=25", page = 1 , 
 						nextTask = XmlParseTask( 
 										specName = "Parse XML",
-										nextTask = IterateUsersTask( 
+										nextTask =  IterateUsersTask( 
 														specName="Iterate Users", 
 														taskRunner = tasksMover,
-														nextTask = LoopbackTask ( backToTask  = { ()=> getUsersTask } , 
+														nextTask = //null 
+														LoopbackTask ( backToTask  = { ()=> getUsersTask } , 
 																loopUntil = {  (mySelf)  =>   
 																	!mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
-																} )
-													)
+																} ) 
+													)  
 
-									)
+									).waitForNext()
 					
 					)
  	// run
@@ -52,7 +53,8 @@ object giVE_app extends App {
 
 	// todo wait for all URLs to be processed, depends on flow to support Future
 	readLine
-	
+	GraphMLStreams flushAllStreams
+
 	_system.shutdown
 }
 

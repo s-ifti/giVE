@@ -95,6 +95,7 @@ case class XmlParseTask ( override val specName: String
 	    XML.loadString(xmlString)
 	}
 
+
 	override def act( replyTo: akka.actor.ActorRef) = { 
 	 	val userXml: Elem =  parseXML( input )
 		replyTo ! processed(  true, "xml loaded" , userXml )
@@ -177,12 +178,25 @@ case  class PrintInput ( override val specName:String = "PrintInput")  extends T
 	given a task output pass it as input to multiple tasks at once and execute. 
 */
 case  class CompositeTasks ( override val specName:String = "CompositeTasks", 
-	var tasks : Seq[TaskBase] 
+	var tasks : Seq[TaskBase] , var completedTasks: List[TaskBase] = List()
 ) extends Task[ AnyRef , AnyRef]  
 {
-	
+	override def observedTaskDone(replyTo: akka.actor.ActorRef, who:TaskBase ) : Boolean= {
+		//println("CompositeTasks observedTaskDone recieved " + who.specName )
+		var ret = super.observedTaskDone(replyTo, who)
+		if(ret) { 
+			replyTo ! this.processed( true, "composite all done", "composite all done") 
+			//println("All composite tasks done")
+		}
+		return ret
+	}
 	override def act(taskMover: akka.actor.ActorRef ) {
-		tasks map ( (x)=> { x.setInput(this.input); taskMover ! x })
+		tasks map ( (x)=> { 
+			
+			waitFor(x)
+		 	x.setInput(this.input)
+		 	taskMover ! x 
+		 	})
 		output = "done"
 	}
 
