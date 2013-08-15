@@ -17,6 +17,7 @@ import scala.io._
 import scala.concurrent._
 import java.nio.charset._
 import java.net.URL
+import java.io._
 
 /* 
 ## Dependencies
@@ -30,16 +31,21 @@ import ExecutionContext.Implicits.global
 case class DownloadURLTask ( 
 	override val specName: String , 
 	val url: String, 
+	val saveToFile: Boolean = false,
+	val saveToFileName: String = "",
 	var page:Int = 1  /*  use page as a general mechanism to access RESTFUL urls 
 							that support paging. todo generalize parameters as generalized dictionary */
-	,override val nextTask: TaskBase = null
+	,override val nextTask: TaskBase = null,
+	val useCache:Boolean = true
 ) extends Task[String, String]  
 {
-	 
+	 var _tries:Int = 1
+
 	input = url
 //	specName = name
 	override def loopIncrement(): Int= {
 		page = page + 1
+		println("loopIncrement " + page)
 		return page
 	}
 	override def loopIndex(): Int = {
@@ -56,31 +62,86 @@ case class DownloadURLTask (
 		var fetchURL = url 
 		if ( page > 1  ) {
 			if( fetchURL.indexOf("?") > 0 ) {
-				fetchURL += "&"
+				fetchURL = fetchURL + "&"
 			}
 			else {
-				fetchURL += "?"
+				fetchURL = fetchURL + "?"
 			}
-			fetchURL += ("page=" + page.toString() )  
+			fetchURL = fetchURL + "page=" + page.toString()   
 		}
-		println("URL: "  + fetchURL)
+		//println("URL: "  + fetchURL)
 
+		var fileName = saveToFileName
+		if( fileName == null || fileName.length == 0 ) {
+			fileName = """\/|\?|\=|\:|\.|\&""".r.replaceAllIn (fetchURL ,  "_")
+			fileName = fileName.replace("http___", "")
+			fileName = fileName.replace("https___", "")
+			//todo use ContentType header
+			if(url.indexOf(".xml") > 0 ) {
+				fileName = fileName + ".xml"
+			}
+			else if(url.indexOf(".json") > 0) {
+				fileName = fileName + ".json"
+			}
+			else {
+				fileName = fileName + ".txt"
+			}
+		}
+		var webCacheFile:File = new File("./web/" + fileName )
+		if( useCache && webCacheFile.exists() ) {
+			//println("read from cache for URL " + fetchURL )
+			val webURL:String = fetchURL
+			fetchURL = "file://" + System.getProperty("user.dir") + "/web/" + fileName ;
+			//println("using cache file: " + fetchURL + " for " + webURL)
+		}
 	 	val downloadStringFuture: Future[String] = downloadPage (  fetchURL  )
 
 	 	downloadStringFuture  onFailure    {
 	 				case t => {  	
 	 					println("onFailure downloadStringFuture ")
-	 					replyTo ! processed(  false, t.getMessage , "error")
+	 					// do not send error
+	 					// try three times 
+	 					_tries = _tries + 1
+	 					if(_tries  >= 3 ) {
+	 						println("3 Tries failed for " + fetchURL )
+	 						replyTo ! processed(  false, t.getMessage , "error")
+	 					}
+	 					else { 
+	 						println("Error downloading " + fetchURL +", retry ....")
+	 						act( replyTo )
+	 					}
 	 				}
 	 			} 
 	 	downloadStringFuture  onSuccess   {
 	 				case result => { 
-			 			//println("onSuccess  downloadStringFuture " + fetchURL )
+			 			println("download done " + fetchURL )
+			 			if( saveToFile && fetchURL.indexOf("file://") != 0 ) {
+			 				
+			 				printToFile( new File("./web/" + fileName))(p => {p.println(result) })
+
+			 			}
 	 					replyTo ! processed(  true, "downloaded" , result)
 	 				}
 	 			} 
 
 	}
+	/* http://stackoverflow.com/a/4608061 */
+	def printToFile(f: java.io.File)(op: java.io.PrintWriter => Unit) {
+  		val writer = new java.io.PrintWriter(f)
+  		try { 
+  			op( writer ) 
+  		} 
+  		finally { 
+  			writer.close() 
+  		}
+	}
+	/* todo
+	def readString( path:String ):String = {
+		var encoding:Charset 
+		var encoded:Array[Byte]  = Files.readAllBytes(Paths.get(path))
+  		return encoding.decode(ByteBuffer.wrap(encoded)).toString()
+ 	
+	}*/
 }
 
 
@@ -136,7 +197,8 @@ case class ParseNameTask( override val specName: String , val elementName : Stri
 */
 case  class LoopbackTask ( override val specName:String = "LoopbackTask", 
 	var backToTask : () => TaskBase , 
-	var loopUntil: ( Task[AnyRef,AnyRef] ) => Boolean
+	var loopUntil: ( Task[AnyRef,AnyRef] ) => Boolean ,
+	var endTask : TaskBase
 	/* loopback can't have a next task for now ,
 	override val nextTask: TaskBase = null */ 
 ) extends Task[ AnyRef , AnyRef]  
@@ -148,15 +210,14 @@ case  class LoopbackTask ( override val specName:String = "LoopbackTask",
 		val iteration = task.loopIncrement()
 
 		if(   loopUntil(this)  ) {
-			println( "iteration # " + iteration)
 			output = "loop"
 			taskMover ! task
-			taskMover ! processed(  true, "loop # " +  task.loopIndex , "end" )
+			//taskMover ! processed(  true, "loop # " +  task.loopIndex , "end" )
 		}
 		else {
 			output = "end"
-			println ("end loop")
-			taskMover ! processed(  true, "loop ended", "end" )
+			//taskMover ! processed(  true, "loop ended", "end" )
+			taskMover ! endTask
 		}
 	}
 

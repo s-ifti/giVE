@@ -82,8 +82,8 @@ object GraphMLStreams {
 	def writeStartElements(writer:PrintWriter ) = {
 		writer.write("<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\">");
 			writeGraphDef(writer, "type", "node", "string")
-			writeGraphDef(writer, "nodeid", "node", "string")
 			writeGraphDef(writer, "content", "node", "string")
+			writeGraphDef(writer, "resourcePictureURL", "node", "string")
 			writeGraphDef(writer, "valueString", "node", "string")
 			writeGraphDef(writer, "createdDate", "node", "datetime")
 			writeGraphDef(writer, "byUser", "node", "string")
@@ -96,12 +96,14 @@ object GraphMLStreams {
 			writer.write("</graph>\n</graphml>\n")
 	}
 	def flushAllStreams = {
+		println("flushAllStreams")
 		_streams.values.foreach(x => { 
 			writeEndElements(x)
 		 	x.flush()
 		 	x.close() 
 
 			})
+		_streams = Map()
 	}
 	def writeGraphDef(writer:PrintWriter , id:String, forWhat:String = "node", datatype:String  = "string") = {
         	writer.write("<key id=\""+ id + "\" for=\""+ forWhat + "\" attr.name=\"" + id + "\" attr.type=\"" + datatype + "\" />")
@@ -120,11 +122,11 @@ case class IterateUsersTask( override val specName: String ,  val taskRunner: ak
 	override def observedTaskDone(replyTo: akka.actor.ActorRef, who:TaskBase ):Boolean = {
 		var ret = super.observedTaskDone(replyTo, who)
 		if( ret ) {
-			println("all Users download done for " + who.specName )
+			//println("all Users download done for " + who.specName )
 			replyTo ! processed( true, "Total " + urlUsers.length + " processed !",  urlUsers)
 		}
 		else {
-			println(". " + who.specName)
+			println(". " )
 		}
 		return ret
 	}
@@ -138,6 +140,7 @@ case class IterateUsersTask( override val specName: String ,  val taskRunner: ak
 			var urlUserDownloadTask = DownloadURLTask(  
 										specName = "Download for " + userURI, 
 										url= userURI + "&all_elements=yes", 
+										saveToFile = true,
 										nextTask = XmlParseTask(  
 														specName = "Parse XML",
 														nextTask = CompositeTasks( specName="composite process user",
@@ -178,10 +181,12 @@ case class ProcessUserNode ( override val specName: String
 		var name:String = input \ "name" text
 		var id:String = input \ "id" text
 		var uri:String = input.attribute("uri").get.toString
+		var avatar:String = (input \ "avatar")(0) \ "@resource" text
 		var node = 
 				<node id={uri}>
 					<data key="uri">{uri}</data>
 					<data key="type">myexperiments.org/user</data>
+					<data key="resourcePictureURL">{avatar}</data>
 					<data key="name">{name}</data>
 				</node>
 		replyTo ! processed( true, "user node processed", node )

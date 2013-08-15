@@ -2,4 +2,8 @@
 .DS_Store
 *.xml.*properties
 pom.xml
+nodes.xml
+edges.xml
 target
+web
+

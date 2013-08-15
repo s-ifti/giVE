@@ -32,17 +32,21 @@ object giVE_app extends App {
 	//download all users and their detailed XMLs, and process them, use Loopback to fetch all users until there
 	//are none returned
  	getUsersTask = DownloadURLTask( 
- 						specName = "UsersDownload", url="http://www.myexperiment.org/users.xml?num=25", page = 1 , 
+ 						specName = "UsersDownload", url="http://www.myexperiment.org/users.xml?num=25", 
+ 						saveToFile = true,
+ 						page = 1 , 
 						nextTask = XmlParseTask( 
 										specName = "Parse XML",
 										nextTask =  IterateUsersTask( 
 														specName="Iterate Users", 
 														taskRunner = tasksMover,
-														nextTask = //null 
+														nextTask = 
 														LoopbackTask ( backToTask  = { ()=> getUsersTask } , 
 																loopUntil = {  (mySelf)  =>   
 																	!mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
-																} ) 
+																} 
+																,
+																endTask = GraphExportEnd() ) 
 													)  
 
 									).waitForNext()
@@ -53,8 +57,18 @@ object giVE_app extends App {
 
 	// todo wait for all URLs to be processed, depends on flow to support Future
 	readLine
-	GraphMLStreams flushAllStreams
-
+	GraphMLStreams.flushAllStreams
 	_system.shutdown
 }
 
+
+case  class GraphExportEnd ( override val specName:String = "GraphExportEnd")  extends Task[ AnyRef , AnyRef]  
+{
+	
+	override def act(taskMover: akka.actor.ActorRef ) {
+		println ("Flush GraphML Files")
+		GraphMLStreams.flushAllStreams
+		output = "done"
+	}
+
+}
