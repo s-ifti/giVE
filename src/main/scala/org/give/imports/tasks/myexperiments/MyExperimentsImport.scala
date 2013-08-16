@@ -32,9 +32,9 @@ case class AccumulateEdges (   var edgesFileName:String
 	
 	override def act( replyTo: akka.actor.ActorRef) = { 
 		
-			input.foreach( edge =>   { 
+		input.foreach( edge =>   { 
 					GraphMLStreams.writeEdges(edgesFileName, edge.toString())
-					} )
+				} )
 		replyTo ! processed( true, "stored", "stored" )
 	}
 }
@@ -46,38 +46,44 @@ object GraphMLStreams {
 	
 
 	def writeNode(fileName:String, x:String) = {
-		var nodesWriter:PrintWriter = null
-		//todo synchronize, use immutable map, see if assignment to _streams is synchronized
-		if( !_streams.contains(fileName)) {
-			nodesWriter = new PrintWriter(new File(fileName + ".xml")) 
-			_streams += (fileName -> nodesWriter )
-			writeStartElements(nodesWriter)
+
+		//need lock to avoid mingled stream output, todo any optimization for concurrency
+		_streams.synchronized { 
+			var nodesWriter:PrintWriter = null
+			//todo synchronize, use immutable map, see if assignment to _streams is synchronized
+			if( !_streams.contains(fileName)) {
+				nodesWriter = new PrintWriter(new File(fileName + ".xml")) 
+				_streams += (fileName -> nodesWriter )
+				writeStartElements(nodesWriter)
+			}
+			else {
+				nodesWriter = _streams(fileName)
+			}
+			nodesWriter.write(x)
+			nodesWriter.write("\n")
 		}
-		else {
-			nodesWriter = _streams(fileName)
-		}
-		nodesWriter.write(x)
-		nodesWriter.write("\n")
 
 	}
 
 
 	def writeEdges(fileName:String, x:String) = {
-		var edgesWriter: PrintWriter = null
-		//todo synchronize, use immutable map, see if assignment to _streams is synchronized
-		if( !_streams.contains(fileName)) {
+		//need lock to avoid mingled stream output, todo any optimization for concurrency
+		_streams.synchronized { 
+			var edgesWriter: PrintWriter = null
+			//todo synchronize, use immutable map, see if assignment to _streams is synchronized
+			if( !_streams.contains(fileName)) {
 
-			edgesWriter = new PrintWriter(new File(fileName + ".xml")) 
-			_streams += (fileName -> edgesWriter )
-			writeStartElements(edgesWriter)
+				edgesWriter = new PrintWriter(new File(fileName + ".xml")) 
+				_streams += (fileName -> edgesWriter )
+				writeStartElements(edgesWriter)
 
+			}
+			else {
+				edgesWriter = _streams(fileName)
+			}
+			edgesWriter.write(x)
+			edgesWriter.write("\n")
 		}
-		else {
-			edgesWriter = _streams(fileName)
-		}
-		edgesWriter.write(x)
-		edgesWriter.write("\n")
-
 	}
 	def writeStartElements(writer:PrintWriter ) = {
 		writer.write("<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\">");
@@ -97,14 +103,18 @@ object GraphMLStreams {
 	}
 	def flushAllStreams = {
 		println("flushAllStreams")
-		_streams.values.foreach(x => { 
-			writeEndElements(x)
-		 	x.flush()
-		 	x.close() 
-
+				//need lock to avoid mingled stream output, todo any optimization for concurrency
+		_streams.synchronized { 
+			_streams.values.foreach(x => { 
+				writeEndElements(x)
+			 	x.flush()
+			 	x.close() 
 			})
-		_streams = Map()
+			//reset streams as concurrent calls can come
+			_streams = Map()
+		}
 	}
+
 	def writeGraphDef(writer:PrintWriter , id:String, forWhat:String = "node", datatype:String  = "string") = {
         	writer.write("<key id=\""+ id + "\" for=\""+ forWhat + "\" attr.name=\"" + id + "\" attr.type=\"" + datatype + "\" />")
         	writer.write("\n")
@@ -135,6 +145,11 @@ case class IterateUsersTask( override val specName: String ,  val taskRunner: ak
 		urlUsers =   input  \\ "user" map(x=> { x.attribute("uri").get.toString } )
 		
 		output = urlUsers
+		if ( urlUsers == null || urlUsers.length == 0 ) {
+
+
+			replyTo ! processed( true, "No Users returned ",  urlUsers)
+		}
 
 		urlUsers.foreach( userURI =>   { 
 			var urlUserDownloadTask = DownloadURLTask(  
@@ -182,12 +197,27 @@ case class ProcessUserNode ( override val specName: String
 		var id:String = input \ "id" text
 		var uri:String = input.attribute("uri").get.toString
 		var avatar:String = (input \ "avatar")(0) \ "@resource" text
+		var alltext:String = ""
+		def accu (x:scala.xml.Node):Boolean = { 
+			if( x.label != "#PCDATA") {
+				alltext += " _" + x.label ; //+ " " + x.text; 
+			}
+			else {
+				alltext += " " + x.text; 	
+			}
+			process(x) 
+			return true
+		}
+			
+		def process(e:scala.xml.Node) = { List ( e child ).flatten foreach( (x)=> accu(x)  ) }
+		process(input)
 		var node = 
 				<node id={uri}>
 					<data key="uri">{uri}</data>
 					<data key="type">myexperiments.org/user</data>
 					<data key="resourcePictureURL">{avatar}</data>
 					<data key="name">{name}</data>
+					<data key="content">{alltext}</data>
 				</node>
 		replyTo ! processed( true, "user node processed", node )
 	}

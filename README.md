@@ -4,7 +4,7 @@ Create default tools/frameworks for processing/importing public datasets into Gr
 Target is to build import process using GraphML for db independence.
 Initial implementation to target Neo4J.
 Approach is similar to Cascading and Tinkerpop pipes but geared towards simpler web centric imports/extracts.
- 
+ Beware this is alpha code.
 
 Activity
 07/13/2013 - Implement generalized flow framework similar to PIPE abstraction on top of akka actor

@@ -43,7 +43,7 @@ object giVE_app extends App {
 														nextTask = 
 														LoopbackTask ( backToTask  = { ()=> getUsersTask } , 
 																loopUntil = {  (mySelf)  =>   
-																	!mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
+																	mySelf.input.asInstanceOf[ Seq[String] ] != null && !mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
 																} 
 																,
 																endTask = GraphExportEnd() ) 
@@ -66,9 +66,14 @@ case  class GraphExportEnd ( override val specName:String = "GraphExportEnd")  e
 {
 	
 	override def act(taskMover: akka.actor.ActorRef ) {
+
+		// Note due to chaining of user tasks this will get called multiple time at the end
 		println ("Flush GraphML Files")
 		GraphMLStreams.flushAllStreams
 		output = "done"
+ 		giVE_app._system.shutdown()
+ 		taskMover ! "STOP" 
+		 
 	}
 
 }

@@ -44,9 +44,11 @@ case class DownloadURLTask (
 	input = url
 //	specName = name
 	override def loopIncrement(): Int= {
-		page = page + 1
-		println("loopIncrement " + page)
-		return page
+		this.synchronized { 
+			page = page + 1
+			println("loopIncrement " + page)
+			return page
+		}
 	}
 	override def loopIndex(): Int = {
 		return page
@@ -114,7 +116,7 @@ case class DownloadURLTask (
 	 			} 
 	 	downloadStringFuture  onSuccess   {
 	 				case result => { 
-			 			println("download done " + fetchURL )
+			 			//println("download done " + fetchURL )
 			 			if( saveToFile && fetchURL.indexOf("file://") != 0 ) {
 			 				
 			 				printToFile( new File("./web/" + fileName))(p => {p.println(result) })
@@ -207,7 +209,7 @@ case  class LoopbackTask ( override val specName:String = "LoopbackTask",
 	override def act(taskMover: akka.actor.ActorRef ) {
 
 		val task = backToTask()
-		val iteration = task.loopIncrement()
+		val iteration:Int = task.loopIncrement()
 
 		if(   loopUntil(this)  ) {
 			output = "loop"

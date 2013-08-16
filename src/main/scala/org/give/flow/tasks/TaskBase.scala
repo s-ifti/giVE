@@ -98,7 +98,10 @@ abstract class TaskBase (
  	def allWaitOver = {}
  	def observedTaskDone(replyTo: akka.actor.ActorRef, whoIsDone:TaskBase):Boolean = {
  		//println("observableTaskDone " + whoIsDone.specName + " for " + this.specName)
- 		waitingForTasks = waitingForTasks.filter( (x) => x.specName != whoIsDone.specName )   
+ 		//todo review concurrency 
+ 		this.synchronized { 
+ 			waitingForTasks = waitingForTasks.filter( (x) => x.specName != whoIsDone.specName )   
+ 		}
  		if(waitingForTasks.isEmpty ) {
 
  			observerTasks.foreach(x => { x.observedTaskDone(replyTo, this) })

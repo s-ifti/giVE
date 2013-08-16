@@ -36,8 +36,15 @@ class TasksMover extends Actor {
 	import context._
 	import java.util.Date
 
+	var _stopped: Boolean = false; 
 	def receive: Receive = { 
+		case  command: String => {
+			if ( command == "STOP" ) {
+				_stopped = true
+			}
 
+
+		}
 		case  msg:  TaskBase=> {
 			//println("Received message " + msg )
 			msg.getState() match{
@@ -85,8 +92,8 @@ class TasksMover extends Actor {
 
 
 		 		}		 	
-		 	}
-		 }
+		 	} // end match
+		} // end msg
 
 	}
 }
