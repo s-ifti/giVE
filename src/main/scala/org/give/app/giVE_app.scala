@@ -69,9 +69,9 @@ case  class GraphExportEnd ( override val specName:String = "GraphExportEnd")  e
 
 		// Note due to chaining of user tasks this will get called multiple time at the end
 		println ("Flush GraphML Files")
-		GraphMLStreams.flushAllStreams
+		//GraphMLStreams.flushAllStreams
 		output = "done"
- 		giVE_app._system.shutdown()
+ 		//giVE_app._system.shutdown()
  		taskMover ! "STOP" 
 		 
 	}

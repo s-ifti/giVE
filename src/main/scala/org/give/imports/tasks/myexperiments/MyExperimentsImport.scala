@@ -1,6 +1,6 @@
 /*
 myexperiments.org specific tasks, e.g. fetching user content
-
+TODO: move to specific project for myexperiments
 */
 package org.give.imports.tasks.myexperiments
 import scala.xml._
@@ -54,7 +54,7 @@ object GraphMLStreams {
 			if( !_streams.contains(fileName)) {
 				nodesWriter = new PrintWriter(new File(fileName + ".xml")) 
 				_streams += (fileName -> nodesWriter )
-				writeStartElements(nodesWriter)
+				writeMetadataElements(nodesWriter)
 			}
 			else {
 				nodesWriter = _streams(fileName)
@@ -75,7 +75,7 @@ object GraphMLStreams {
 
 				edgesWriter = new PrintWriter(new File(fileName + ".xml")) 
 				_streams += (fileName -> edgesWriter )
-				writeStartElements(edgesWriter)
+				writeMetadataElements(edgesWriter)
 
 			}
 			else {
@@ -85,15 +85,16 @@ object GraphMLStreams {
 			edgesWriter.write("\n")
 		}
 	}
-	def writeStartElements(writer:PrintWriter ) = {
+	def writeMetadataElements(writer:PrintWriter ) = {
 		writer.write("<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\">");
+			writeGraphDef(writer, "uri", "node", "string")
+			writeGraphDef(writer, "name", "node", "string")
 			writeGraphDef(writer, "type", "node", "string")
 			writeGraphDef(writer, "content", "node", "string")
 			writeGraphDef(writer, "resourcePictureURL", "node", "string")
 			writeGraphDef(writer, "valueString", "node", "string")
 			writeGraphDef(writer, "createdDate", "node", "datetime")
 			writeGraphDef(writer, "byUser", "node", "string")
-			writeGraphDef(writer, "uri", "node", "string")
 			writeGraphDef(writer, "edgetype", "edge", "string")
 			writeGraphDef(writer, "weight", "edge", "int")
  			writer.write( "<graph id=\"G\" edgedefault=\"directed\">\n" )
@@ -186,7 +187,17 @@ case class IterateUsersTask( override val specName: String ,  val taskRunner: ak
 	}
 
 }
+object NodeCounters {
+	var _nodes:Int = 0
 
+	def incrementNodes() = { 
+		this.synchronized 
+		{
+			_nodes = _nodes + 1;
+			println("NODE: " + _nodes)
+		}
+	}
+}
 
 case class ProcessUserNode ( override val specName: String 
 	,  override val nextTask: TaskBase = null
@@ -198,19 +209,22 @@ case class ProcessUserNode ( override val specName: String
 		var uri:String = input.attribute("uri").get.toString
 		var avatar:String = (input \ "avatar")(0) \ "@resource" text
 		var alltext:String = ""
-		def accu (x:scala.xml.Node):Boolean = { 
+		def concatContent (x:scala.xml.Node):Boolean = { 
 			if( x.label != "#PCDATA") {
 				alltext += " _" + x.label ; //+ " " + x.text; 
 			}
 			else {
 				alltext += " " + x.text; 	
 			}
-			process(x) 
+			processContent(x) 
 			return true
 		}
 			
-		def process(e:scala.xml.Node) = { List ( e child ).flatten foreach( (x)=> accu(x)  ) }
-		process(input)
+		def processContent(e:scala.xml.Node) = { List ( e child ).flatten foreach( (x)=> concatContent(x)  ) }
+
+		processContent(input)
+		NodeCounters.incrementNodes
+		
 		var node = 
 				<node id={uri}>
 					<data key="uri">{uri}</data>
