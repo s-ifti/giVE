@@ -52,8 +52,33 @@ object giVE_app extends App {
 									).waitForNext()
 					
 					)
- 	// run
-	tasksMover ! getUsersTask
+ 	// run import for users
+	//tasksMover ! getUsersTask
+
+
+	var getWorkflowsTask:TaskBase = null
+	getWorkflowsTask = DownloadURLTask( 
+ 						specName = "WorkflowsDownload", url="http://www.myexperiment.org/workflows.xml?num=25", 
+ 						saveToFile = true,
+ 						page = 1 , 
+						nextTask = XmlParseTask( 
+										specName = "Parse XML",
+										nextTask =  IterateWorkflowsTask( 
+														specName="Iterate Workflows", 
+														taskRunner = tasksMover,
+														nextTask = 
+														LoopbackTask ( backToTask  = { ()=> getWorkflowsTask } , 
+																loopUntil = {  (mySelf)  =>   
+																	mySelf.input.asInstanceOf[ Seq[String] ] != null && !mySelf.input.asInstanceOf[ Seq[String] ].isEmpty  
+																} 
+																,
+																endTask = GraphExportEnd() ) 
+													)  
+
+									).waitForNext()
+					
+					)
+	tasksMover ! getWorkflowsTask
 
 	// todo wait for all URLs to be processed, depends on flow to support Future
 	readLine
@@ -68,11 +93,11 @@ case  class GraphExportEnd ( override val specName:String = "GraphExportEnd")  e
 	override def act(taskMover: akka.actor.ActorRef ) {
 
 		// Note due to chaining of user tasks this will get called multiple time at the end
-		println ("Flush GraphML Files")
+		//println ("Flush GraphML Files")
 		//GraphMLStreams.flushAllStreams
 		output = "done"
  		//giVE_app._system.shutdown()
- 		taskMover ! "STOP" 
+ 		//taskMover ! "STOP" 
 		 
 	}
 

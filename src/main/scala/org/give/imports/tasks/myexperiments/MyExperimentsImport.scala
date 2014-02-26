@@ -187,14 +187,91 @@ case class IterateUsersTask( override val specName: String ,  val taskRunner: ak
 	}
 
 }
+
+
+
+
+
+case class IterateWorkflowsTask( override val specName: String ,  val taskRunner: akka.actor.ActorRef 
+	, override val nextTask: TaskBase = null
+) extends Task[Elem, Seq[String] ] {
+	var urlWorkflows: Seq[String] = null
+
+	override def observedTaskDone(replyTo: akka.actor.ActorRef, who:TaskBase ):Boolean = {
+		var ret = super.observedTaskDone(replyTo, who)
+		if( ret ) {
+			//println("all workflows download done for " + who.specName )
+			replyTo ! processed( true, "Total " + urlWorkflows.length + " processed !",  urlWorkflows)
+		}
+		else {
+			println(". " )
+		}
+		return ret
+	}
+	override def act( replyTo: akka.actor.ActorRef) = { 
+		//println  " Acting IterateWorkflowsTask "
+		urlWorkflows =   input  \\ "workflow" map(x=> { x.attribute("uri").get.toString } )
+		
+		output = urlWorkflows
+		if ( urlWorkflows == null || urlWorkflows.length == 0 ) {
+
+
+			replyTo ! processed( true, "No Workflows returned ",  urlWorkflows)
+		}
+
+		urlWorkflows.foreach( workflowURI =>   { 
+			var urlWorkflowDownloadTask = DownloadURLTask(  
+										specName = "Download for " + workflowURI, 
+										url= workflowURI + "&all_elements=yes", 
+										saveToFile = true,
+										nextTask = XmlParseTask(  
+														specName = "Parse XML",
+														nextTask = CompositeTasks( specName="composite process workflow",
+																				tasks = List(
+																							ProcessWorkflowNode ( 
+																								specName = "Process workflow node " ,
+																								//nextTask = PrintInput()
+																								nextTask = AccumulateNodes("nodes")
+																							),
+																							ProcessWorkflowEdges ( 
+																								specName = "Process workflow edges" ,
+																								//nextTask = PrintInput()
+																								nextTask = AccumulateEdges("edges")
+																							)
+																						)
+																	)
+													).waitForNext()
+										).waitForNext()
+		                    
+		    waitFor(urlWorkflowDownloadTask)
+		 	taskRunner  !  urlWorkflowDownloadTask;
+
+
+ 		} )
+
+
+	}
+
+}
 object NodeCounters {
 	var _nodes:Int = 0
+	var _edges:Int = 0
 
-	def incrementNodes() = { 
+	def incrementNodes():Int = { 
 		this.synchronized 
 		{
 			_nodes = _nodes + 1;
 			println("NODE: " + _nodes)
+			return _nodes
+		}
+	}
+	def incrementEdges():Int = { 
+		this.synchronized 
+		{
+			_edges = _edges + 1;
+			println("EDGES: " + _edges)
+			return _edges
+			//println("NODE: " + _nodes)
 		}
 	}
 }
@@ -245,11 +322,11 @@ case class ProcessUserEdges ( override val specName: String
 		var friendsURI: Seq[String] =  input  \\ "friend" map(x=> { x.attribute("uri").get.toString })
 		
 		var myuri:String = input.attribute("uri").get.toString
-		ProcessUserEdges._edgeCtr = ProcessUserEdges._edgeCtr + 1
-		val edgeCtr:String = ProcessUserEdges._edgeCtr.toString
+		
 		var allEdges: List[Elem] = List()
 
 		friendsURI map ( (x) =>  {
+				val edgeCtr:String = NodeCounters.incrementEdges().toString
 				val thisEdge = 
 						<edge id={edgeCtr} label="myfriend" source={myuri} target={x}>
 						</edge>
@@ -259,9 +336,70 @@ case class ProcessUserEdges ( override val specName: String
 		replyTo ! processed( true, "user edges processed", allEdges )
 	}
 }
-object ProcessUserEdges {
 
-	var _edgeCtr: Int = 0
+
+
+
+
+case class ProcessWorkflowNode ( override val specName: String 
+	,  override val nextTask: TaskBase = null
+) extends Task[Elem, Elem ]  {
+	
+	override def act( replyTo: akka.actor.ActorRef) = { 
+		var name:String = input \ "title" text
+		var id:String = input \ "id" text
+		var uri:String = input.attribute("uri").get.toString
+		var svg:String = (input \ "svg")(0)  text
+		var alltext:String = ""
+		def concatContent (x:scala.xml.Node):Boolean = { 
+			if( x.label != "#PCDATA") {
+				alltext += " _" + x.label ; //+ " " + x.text; 
+			}
+			else {
+				alltext += " " + x.text; 	
+			}
+			processContent(x) 
+			return true
+		}
+			
+		def processContent(e:scala.xml.Node) = { List ( e child ).flatten foreach( (x)=> concatContent(x)  ) }
+
+		processContent(input)
+		NodeCounters.incrementNodes
+		
+		var node = 
+				<node id={uri}>
+					<data key="uri">{uri}</data>
+					<data key="type">myexperiments.org/workflow</data>
+					<data key="resourcePictureURL">{svg}</data>
+					<data key="name">{name}</data>
+					<data key="content">{alltext}</data>
+				</node>
+		replyTo ! processed( true, "workflow node processed", node )
+	}
 }
 
+case class ProcessWorkflowEdges ( override val specName: String 
+	,  override val nextTask: TaskBase = null
+) extends Task[Elem, Seq[Elem] ]  {
+	
+	override def act( replyTo: akka.actor.ActorRef) = { 
+		/* no edges right now  for workflow
+		var friendsURI: Seq[String] =  input  \\ "friend" map(x=> { x.attribute("uri").get.toString })
+		
+		var myuri:String = input.attribute("uri").get.toString
+		
+		var allEdges: List[Elem] = List()
 
+		friendsURI map ( (x) =>  {
+				val edgeCtr:String = NodeCounters.incrementEdges().toString
+				val thisEdge = 
+						<edge id={edgeCtr} label="myfriend" source={myuri} target={x}>
+						</edge>
+			 	allEdges = thisEdge::allEdges 
+			} )
+		
+		replyTo ! processed( true, "user edges processed", allEdges )
+		*/
+	}
+}

@@ -71,7 +71,7 @@ case class DownloadURLTask (
 			}
 			fetchURL = fetchURL + "page=" + page.toString()   
 		}
-		//println("URL: "  + fetchURL)
+		println("URL: "  + fetchURL)
 
 		var fileName = saveToFileName
 		if( fileName == null || fileName.length == 0 ) {

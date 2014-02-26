@@ -6,6 +6,8 @@ Initial implementation to target Neo4J.
 Approach is similar to Cascading and Tinkerpop pipes but geared towards simpler web centric imports/extracts.
  Beware this is alpha code.
 
+TODO: Use Twitter Finagle for async response dependancies between task
+
 Activity
 07/13/2013 - Implement generalized flow framework similar to PIPE abstraction on top of akka actor
 				This will allow generalized construction of various tasks that are to be performed when crawling and extracting public datasets for import to neo4j
